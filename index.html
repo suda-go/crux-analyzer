@@ -983,6 +983,7 @@ function loadHistory() {
       <td><span class="score-badge ${sc}">${scoreText}</span></td>
       <td>
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="viewHistory(${h.id})">查看</button>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="exportHistoryReport(${h.id})">💾 保存</button>
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;color:var(--red)" onclick="deleteHistory(${h.id})">删除</button>
       </td>`;
     tbody.appendChild(tr);
@@ -1030,6 +1031,58 @@ function clearHistory() {
 function scrollToHistory() {
   const el = document.getElementById('historyCard');
   if (el) { el.classList.add('show'); el.scrollIntoView({ behavior: 'smooth' }); }
+}
+
+// Export a history record as standalone HTML report
+function exportHistoryReport(id) {
+  const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  const record = history.find(h => h.id === id);
+  if (!record) return;
+
+  const rows = record.results.map(r => {
+    if (!r.ok) return `<tr><td><a href="${r.url}">${r.url}</a></td><td colspan="11" style="color:#EA4335">❌ ${r.error || '失败'}</td></tr>`;
+    const cruxCat = r.rawData?.loadingExperience?.overall_category;
+    const cwv = cruxCat === 'FAST' ? '🟢 通过' : cruxCat === 'AVERAGE' ? '🟠 需改进' : cruxCat === 'SLOW' ? '🔴 差' : '-';
+    const lh = r.lighthouse || {};
+    const sc = v => v !== undefined && v !== null ? `<span class="badge ${v>=0.9?'good':v>=0.5?'needs':'poor'}">${Math.round(v*100)}</span>` : '<span class="badge na">-</span>';
+    const reportUrl = buildReportUrl(r.url);
+
+    return `<tr>
+      <td style="word-break:break-all;max-width:200px"><a href="${r.url}" target="_blank">${r.url.length>40?r.url.slice(0,40)+'...':r.url}</a></td>
+      <td style="text-align:center">${cwv}</td>
+      <td style="text-align:center">${r.LCP?.p75?Math.round(r.LCP.p75)+'ms':'-'}</td>
+      <td style="text-align:center">${r.CLS?.p75?.toFixed(3)||'-'}</td>
+      <td style="text-align:center">${r.INP?.p75?Math.round(r.INP.p75)+'ms':'-'}</td>
+      <td style="text-align:center">${r.FCP?.p75?Math.round(r.FCP.p75)+'ms':'-'}</td>
+      <td style="text-align:center">${r.TTFB?.p75?Math.round(r.TTFB.p75)+'ms':'-'}</td>
+      <td style="text-align:center">${sc(lh.perfScore)}</td>
+      <td style="text-align:center">${sc(lh.accessibilityScore)}</td>
+      <td style="text-align:center">${sc(lh.bestPracticesScore)}</td>
+      <td style="text-align:center">${sc(lh.seoScore)}</td>
+      <td style="text-align:center"><a href="${reportUrl}" target="_blank" style="color:#FF6B9D">📋</a></td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><title>Web Vitals 报告 - ${record.time}</title>
+<style>
+body{font-family:-apple-system,sans-serif;padding:20px;background:#F5F7FA;color:#333}
+h1{font-size:20px}p{color:#666;font-size:14px}
+table{width:100%;border-collapse:collapse;background:#FFF;border-radius:8px;overflow:hidden;margin-top:12px}
+th{background:#FFF8FA;padding:10px 8px;font-size:12px;text-align:left;border-bottom:2px solid #FF6B9D;color:#666}
+td{padding:8px;border-bottom:1px solid #F0F0F0;font-size:13px}
+a{color:#FF6B9D;text-decoration:none}.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:700;font-size:12px}
+.good{background:#E6F4EA;color:#1E8E3E}.needs{background:#FEF7E0;color:#E37400}.poor{background:#FCE8E6;color:#D93025}.na{background:#F0F0F0;color:#999}
+</style></head><body>
+<h1>📊 Web Vitals 分析报告</h1>
+<p>🕐 ${record.time} | 📱 ${record.device} | 🔗 ${record.count} 个 URL</p>
+<table><thead><tr>
+<th>URL</th><th>CrUX</th><th>LCP</th><th>CLS</th><th>INP</th><th>FCP</th><th>TTFB</th><th>性能</th><th>无障碍</th><th>最佳做法</th><th>SEO</th><th>报告</th>
+</tr></thead><tbody>${rows}</tbody></table>
+<p style="margin-top:16px;text-align:center;color:#999;font-size:12px">由 Web Vitals 分析工具生成</p>
+</body></html>`;
+
+  download(html, `web-vitals-report-${record.time.replace(/[/: ]/g,'-')}.html`, 'text/html');
 }
 
 // Load history on page load
