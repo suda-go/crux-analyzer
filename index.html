@@ -123,11 +123,8 @@
   
   <div class="config-card">
     <h2>⚙️ 配置</h2>
+    <input type="hidden" id="apiKey" value="AIzaSyBZkKc8eAfFPwL4rcSDGbHPM5Jp33alQwY">
     <div class="form-row">
-      <div class="form-group" style="flex:2">
-        <label>🔑 Google Cloud API Key</label>
-        <input type="password" id="apiKey" placeholder="AIzaSy...">
-      </div>
       <div class="form-group">
         <label>📱 设备类型</label>
         <select id="formFactor">
@@ -366,7 +363,6 @@ function showDetail(r) {
 
 async function startAnalysis() {
   const apiKey = getApiKey();
-  if (!apiKey) { alert('请输入 API Key'); return; }
   
   const urls = getUrls();
   if (urls.length === 0) { alert('请输入至少一个 URL'); return; }
@@ -405,7 +401,6 @@ function loadSample() {
   document.getElementById('urlList').value = `https://www.google.com
 https://www.github.com
 https://www.wikipedia.org`;
-  document.getElementById('apiKey').value = 'AQ.Ab8RN6J75BCCA8QD4yyqdC9QMPre9HDru9hQuTPaobqYMJrDWA';
 }
 
 function clearAll() {
@@ -458,12 +453,7 @@ function download(content, filename, type) {
   URL.revokeObjectURL(url);
 }
 
-// Auto-save API key
-document.getElementById('apiKey').addEventListener('change', function() {
-  localStorage.setItem('crux_api_key', this.value);
-});
-const savedKey = localStorage.getItem('crux_api_key');
-if (savedKey) document.getElementById('apiKey').value = savedKey;
+// API key is embedded, no need to save/restore
 </script>
 </body>
 </html>
