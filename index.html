@@ -69,10 +69,6 @@
 
   <div class="config-card">
     <h2>⚙️ 分析配置</h2>
-    <div class="info-box">
-      💡 <strong>无需 API Key！</strong> 本工具直接调用 PageSpeed Insights API，数据从你的浏览器发送到 Google。
-      <br>请确保你的网络可以访问 <code>www.googleapis.com</code>（翻墙即可）。
-    </div>
     <div class="form-row">
       <div class="form-group">
         <label>📱 设备类型</label>
@@ -166,10 +162,12 @@ function fmtVal(val, unit, dec) {
   return val;
 }
 
-// Fetch CrUX data via PageSpeed API (called from browser, needs Google access)
+const API_KEY = 'AIzaSyB2DnA91Z0MQ0auoVtEJ42TKT_9F_Glmfw';
+
+// Fetch CrUX data via PageSpeed API (called from browser)
 async function fetchCrUX(url, strategy) {
   const api = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed`;
-  const params = new URLSearchParams({ url, strategy, category: 'performance' });
+  const params = new URLSearchParams({ url, strategy, category: 'performance', key: API_KEY });
   const resp = await fetch(`${api}?${params}`);
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
