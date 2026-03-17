@@ -91,6 +91,9 @@
     </div>
     <div class="form-row">
       <button class="btn btn-primary" id="startBtn" onclick="startAnalysis()">🚀 开始分析</button>
+      <label class="btn btn-secondary" style="margin:0;cursor:pointer">📁 导入 Excel
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="importFile(event)">
+      </label>
       <button class="btn btn-secondary" onclick="loadSample()">📋 加载示例</button>
       <button class="btn btn-secondary" onclick="clearAll()">🗑️ 清空</button>
     </div>
@@ -184,6 +187,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const METRICS_INFO = {
   LARGEST_CONTENTFUL_PAINT_MS: { name: 'LCP', unit: 'ms', good: 2500, poor: 4000, label: '最大内容渲染' },
@@ -447,9 +451,58 @@ function clearAll() {
   document.getElementById('resultsCard').classList.remove('show');
   document.getElementById('detailPanel').classList.remove('show');
   document.getElementById('progressBar').classList.remove('active');
+  document.getElementById('fileInput').value = '';
   setStatus('');
   allResults = [];
   allRawData = [];
+}
+
+// Import Excel/CSV file
+function importFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      const urls = [];
+      const urlPattern = /https?:\/\/[^\s]+/;
+
+      for (const row of rows) {
+        for (const cell of row) {
+          if (typeof cell === 'string') {
+            const trimmed = cell.trim();
+            // Check if it's a URL
+            if (urlPattern.test(trimmed)) {
+              urls.push(trimmed);
+            } else if (trimmed && !trimmed.includes(' ') && (trimmed.includes('.') || trimmed.startsWith('http'))) {
+              // Might be a URL without protocol
+              urls.push(trimmed.startsWith('http') ? trimmed : 'https://' + trimmed);
+            }
+          }
+        }
+      }
+
+      if (urls.length === 0) {
+        alert('❌ 文件中没有找到 URL');
+        return;
+      }
+
+      // Deduplicate
+      const unique = [...new Set(urls)];
+      document.getElementById('urlList').value = unique.join('\n');
+      setStatus(`📁 已导入 ${unique.length} 个 URL`);
+    } catch (err) {
+      alert('❌ 文件解析失败: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = '';
 }
 
 function exportJSON() {
