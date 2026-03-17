@@ -229,11 +229,9 @@ async function fetchCrUX(url, strategy) {
   const api = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed`;
   const params = new URLSearchParams({ url, strategy, category: 'performance', key: API_KEY });
   const resp = await fetch(`${api}?${params}`);
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${resp.status}`);
-  }
-  return resp.json();
+  const data = await resp.json().catch(() => ({}));
+  // Return data even if Lighthouse failed — CrUX may still be present
+  return data;
 }
 
 function parseCrUX(data) {
@@ -295,20 +293,33 @@ async function analyzeOne(url, strategy, mode) {
     setStatus(`⏳ 正在分析: ${url} ...`);
     const data = await fetchCrUX(url, strategy);
 
+    const hasCrux = data.loadingExperience?.metrics && Object.keys(data.loadingExperience.metrics).length > 0;
+    const hasLH = data.lighthouseResult?.categories?.performance;
+
+    if (!hasCrux && !hasLH) {
+      const errMsg = data.error?.message || '无数据（页面可能无法被分析）';
+      return { url, ok: false, error: errMsg };
+    }
+
     const result = { url, ok: true, rawData: data };
 
     // Parse CrUX real user data
     const crux = parseCrUX(data);
     Object.assign(result, crux);
 
-    // Also get Lighthouse lab data if requested
-    if (mode === 'lighthouse') {
+    // Also get Lighthouse lab data if requested and available
+    if (mode === 'lighthouse' && hasLH) {
       const lh = parseLighthouse(data);
       result.lighthouse = lh;
       if (lh.perfScore !== undefined) result.overallScore = lh.perfScore;
-    } else {
-      // Use CrUX overall category
-      if (crux.overallScore) result.overallScore = crux.overallScore;
+    }
+
+    // Use CrUX overall category if no LH score
+    if (!result.overallScore && crux.overallScore) result.overallScore = crux.overallScore;
+
+    // Add warning if Lighthouse failed but CrUX is OK
+    if (hasCrux && !hasLH && data.error) {
+      result.lhWarning = data.error.message;
     }
 
     return result;
