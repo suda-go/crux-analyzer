@@ -1082,7 +1082,10 @@ a{color:#FF6B9D;text-decoration:none}.badge{display:inline-block;padding:2px 8px
 <p style="margin-top:16px;text-align:center;color:#999;font-size:12px">由 Web Vitals 分析工具生成</p>
 </body></html>`;
 
-  download(html, `web-vitals-report-${record.time.replace(/[/: ]/g,'-')}.html`, 'text/html');
+  // Open in new tab
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
 }
 
 // Load history on page load
