@@ -74,6 +74,11 @@
   <h1>📊 Web Vitals 批量分析</h1>
   <p class="subtitle">基于 PageSpeed Insights API（Chrome 真实用户数据 + 实验室数据）</p>
 
+  <!-- Top right buttons -->
+  <div style="position:fixed;top:20px;right:20px;z-index:100;display:flex;gap:8px;">
+    <button class="btn btn-secondary" onclick="scrollToHistory()" style="box-shadow:0 2px 8px rgba(0,0,0,0.15)">📜 历史记录</button>
+  </div>
+
   <div class="config-card">
     <h2>⚙️ 分析配置</h2>
     <div class="form-row">
@@ -112,7 +117,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <h2>📊 分析结果</h2>
       <div class="export-btns">
-        <button class="btn btn-secondary" onclick="exportJSON()">💾 导出 JSON</button>
+        <button class="btn btn-secondary" onclick="exportExcel()">📊 导出 Excel</button>
         <button class="btn btn-secondary" onclick="exportCSV()">📄 导出 CSV</button>
       </div>
     </div>
@@ -130,6 +135,7 @@
           <th style="text-align:center">无障碍</th>
           <th style="text-align:center">最佳做法</th>
           <th style="text-align:center">SEO</th>
+          <th style="text-align:center">报告</th>
         </tr>
       </thead>
       <tbody id="resultsBody"></tbody>
@@ -511,8 +517,18 @@ function renderResult(r) {
     }
   }
 
+  // PageSpeed report link
+  const reportUrl = buildReportUrl(r.url);
+  cells += `<td style="text-align:center"><a href="${reportUrl}" target="_blank" style="color:var(--pink);font-size:12px;white-space:nowrap">📋 查看</a></td>`;
+
   tr.innerHTML = cells;
   tbody.appendChild(tr);
+}
+
+// Build PageSpeed Web.dev report URL
+function buildReportUrl(url) {
+  const encoded = url.replace(/https?:\/\//, '').replace(/\//g, '-');
+  return `https://pagespeed.web.dev/analysis/${encoded}?form_factor=mobile`;
 }
 
 function showDetail(r) {
@@ -783,29 +799,62 @@ function exportJSON() {
   download(JSON.stringify(data, null, 2), 'web-vitals.json', 'application/json');
 }
 
+// Generate a single row with all fields for a result
+function buildFullRow(r) {
+  if (!r.ok) return { 'URL': r.url, '状态': '失败', '错误': r.error };
+  const cruxCat = r.rawData?.loadingExperience?.overall_category;
+  let cwvLabel = cruxCat === 'FAST' ? '通过' : cruxCat === 'AVERAGE' ? '需改进' : cruxCat === 'SLOW' ? '差' : '-';
+  const lh = r.lighthouse;
+  return {
+    'URL': r.url,
+    'CrUX评估': cwvLabel,
+    'LCP(ms)': r.LCP?.p75 || '-',
+    'CLS': r.CLS?.p75?.toFixed(3) || '-',
+    'INP(ms)': r.INP?.p75 || '-',
+    'FCP(ms)': r.FCP?.p75 || '-',
+    'TTFB(ms)': r.TTFB?.p75 || '-',
+    'Good% LCP': r.LCP ? Math.round(r.LCP.goodPct * 100) + '%' : '-',
+    'Good% CLS': r.CLS ? Math.round(r.CLS.goodPct * 100) + '%' : '-',
+    'Good% INP': r.INP ? Math.round(r.INP.goodPct * 100) + '%' : '-',
+    'Good% FCP': r.FCP ? Math.round(r.FCP.goodPct * 100) + '%' : '-',
+    '性能': lh?.perfScore !== undefined ? Math.round(lh.perfScore * 100) : '-',
+    '无障碍': lh?.accessibilityScore !== undefined ? Math.round(lh.accessibilityScore * 100) : '-',
+    '最佳做法': lh?.bestPracticesScore !== undefined ? Math.round(lh.bestPracticesScore * 100) : '-',
+    'SEO': lh?.seoScore !== undefined ? Math.round(lh.seoScore * 100) : '-',
+    '报告地址': buildReportUrl(r.url),
+  };
+}
+
 function exportCSV() {
   if (!allResults.length) return alert('没有数据');
+  const results = allResults.filter(Boolean);
+  const rows = results.map(buildFullRow);
 
+  // Build CSV with BOM for Chinese support
+  const headers = Object.keys(rows[0]);
+  let csv = '\uFEFF' + headers.join(',') + '\n';
+  for (const row of rows) {
+    csv += headers.map(h => {
+      const v = row[h] ?? '';
+      // Escape quotes and wrap in quotes if contains comma or quote
+      const s = String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',') + '\n';
+  }
+
+  download(csv, `web-vitals-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+}
+
+function exportExcel() {
+  if (!allResults.length) return alert('没有数据');
   const results = allResults.filter(Boolean);
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: 概览
-  const summaryRows = results.map(r => {
-    if (!r.ok) return { 'URL': r.url, '状态': '失败', '错误': r.error };
-    return {
-      'URL': r.url,
-      '评分': r.overallScore ? Math.round(r.overallScore * 100) + '%' : '-',
-      'LCP (ms)': r.LCP?.p75 || '-',
-      'CLS': r.CLS?.p75?.toFixed(3) || '-',
-      'INP (ms)': r.INP?.p75 || '-',
-      'FCP (ms)': r.FCP?.p75 || '-',
-      'TTFB (ms)': r.TTFB?.p75 || '-',
-      'Good% LCP': r.LCP ? Math.round(r.LCP.goodPct * 100) + '%' : '-',
-      'Good% CLS': r.CLS ? Math.round(r.CLS.goodPct * 100) + '%' : '-',
-      'Good% INP': r.INP ? Math.round(r.INP.goodPct * 100) + '%' : '-',
-      'Good% FCP': r.FCP ? Math.round(r.FCP.goodPct * 100) + '%' : '-',
-    };
-  });
+  // Sheet 1: 概览 (all fields)
+  const summaryRows = results.map(buildFullRow);
   const ws1 = XLSX.utils.json_to_sheet(summaryRows);
   XLSX.utils.book_append_sheet(wb, ws1, '概览');
 
@@ -865,16 +914,6 @@ function exportCSV() {
     XLSX.utils.book_append_sheet(wb, ws4, '优化机会');
   }
 
-  // Sheet 5: 原始数据 (JSON per URL)
-  const rawRows = results.map(r => ({
-    'URL': r.url,
-    '状态': r.ok ? '成功' : '失败',
-    '完整JSON': r.ok ? JSON.stringify(r.rawData) : r.error,
-  }));
-  const ws5 = XLSX.utils.json_to_sheet(rawRows);
-  XLSX.utils.book_append_sheet(wb, ws5, '原始数据');
-
-  // Generate and download
   XLSX.writeFile(wb, `web-vitals-${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
@@ -986,6 +1025,11 @@ function clearHistory() {
   if (!confirm('确定清空所有历史记录？')) return;
   localStorage.removeItem(HISTORY_KEY);
   loadHistory();
+}
+
+function scrollToHistory() {
+  const el = document.getElementById('historyCard');
+  if (el) { el.classList.add('show'); el.scrollIntoView({ behavior: 'smooth' }); }
 }
 
 // Load history on page load
