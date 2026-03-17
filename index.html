@@ -126,6 +126,62 @@
     <h3 id="detailTitle"></h3>
     <div id="detailContent"></div>
   </div>
+
+  <!-- Metrics Guide -->
+  <div class="config-card">
+    <h2>📖 指标说明</h2>
+    <details>
+      <summary style="cursor:pointer;font-weight:600;color:var(--pink);margin-bottom:12px;">点击展开/收起详细说明</summary>
+      <div style="margin-top:12px;">
+        <h3 style="color:var(--pink);font-size:14px;margin-bottom:8px;">🏆 三大核心指标（影响 SEO 排名）</h3>
+        
+        <div style="margin-bottom:12px;">
+          <strong>📏 LCP — Largest Contentful Paint（最大内容渲染）</strong><br>
+          <span style="color:var(--text2);font-size:13px;">衡量页面主要内容的加载速度，计算从开始加载到最大文本块/图片完全渲染的时间</span><br>
+          <span class="score-badge score-good" style="margin-top:4px;">≤2.5s 好</span>
+          <span class="score-badge score-needs">≤4s 需改进</span>
+          <span class="score-badge score-poor">>4s 差</span>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <strong>📐 CLS — Cumulative Layout Shift（累计布局偏移）</strong><br>
+          <span style="color:var(--text2);font-size:13px;">衡量页面是否"跳动"（如广告加载把内容挤下去），计算所有意外布局偏移的累计分数</span><br>
+          <span class="score-badge score-good" style="margin-top:4px;">≤0.1 好</span>
+          <span class="score-badge score-needs">≤0.25 需改进</span>
+          <span class="score-badge score-poor">>0.25 差</span>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <strong>👆 INP — Interaction to Next Paint（交互响应延迟）</strong><br>
+          <span style="color:var(--text2);font-size:13px;">衡量用户点击/输入后，页面多快有视觉反馈</span><br>
+          <span class="score-badge score-good" style="margin-top:4px;">≤200ms 好</span>
+          <span class="score-badge score-needs">≤500ms 需改进</span>
+          <span class="score-badge score-poor">>500ms 差</span>
+        </div>
+
+        <h3 style="color:var(--pink);font-size:14px;margin:12px 0 8px;">🔧 辅助指标</h3>
+
+        <div style="margin-bottom:12px;">
+          <strong>🎨 FCP — First Contentful Paint（首次内容渲染）</strong><br>
+          <span style="color:var(--text2);font-size:13px;">从开始加载到第一个内容（文字/图片）出现的时间</span><br>
+          <span class="score-badge score-good" style="margin-top:4px;">≤1.8s 好</span>
+          <span class="score-badge score-needs">≤3s 需改进</span>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <strong>⚡ TTFB — Time to First Byte（首字节时间）</strong><br>
+          <span style="color:var(--text2);font-size:13px;">浏览器收到服务器第一个字节的时间，反映服务器响应速度 + 网络延迟</span><br>
+          <span class="score-badge score-good" style="margin-top:4px;">≤800ms 好</span>
+          <span class="score-badge score-needs">≤1.8s 需改进</span>
+        </div>
+
+        <div style="margin-top:12px;padding:10px;background:#F5F5F5;border-radius:8px;font-size:12px;color:var(--text2);">
+          📊 <strong>百分比</strong>表示"好用户占比"——90% 意味着 90% 的真实用户体验达到"好"标准。越高越好。<br>
+          📖 参考：<a href="https://web.dev/vitals" target="_blank" style="color:var(--pink)">web.dev/vitals</a>
+        </div>
+      </div>
+    </details>
+  </div>
 </div>
 
 <script>
