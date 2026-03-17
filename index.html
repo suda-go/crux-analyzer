@@ -399,6 +399,7 @@ async function analyzeOne(url, strategy, mode) {
 
     const hasCrux = data.loadingExperience?.metrics && Object.keys(data.loadingExperience.metrics).length > 0;
     const hasLH = data.lighthouseResult?.categories?.performance;
+    const isLHError = data.error?.message?.includes('NO_FCP') || data.error?.message?.includes('Lighthouse') || data.error?.code === 'NO_FCP';
 
     if (!hasCrux && !hasLH) {
       const errMsg = data.error?.message || '无数据（页面可能无法被分析）';
@@ -406,6 +407,11 @@ async function analyzeOne(url, strategy, mode) {
     }
 
     const result = { url, ok: true, rawData: data };
+
+    // Show Lighthouse error as warning if CrUX data exists
+    if (hasCrux && isLHError && data.error) {
+      result.lhWarning = data.error.message;
+    }
 
     // Parse CrUX real user data
     const crux = parseCrUX(data);
@@ -586,6 +592,14 @@ function showDetail(r) {
         <span><span class="dot" style="background:var(--red)"></span> 差 ${poor.toFixed(1)}%</span>
       </div>
       <hr style="border:none;border-top:1px solid #F0F0F0;margin:12px 0;">`;
+  }
+
+  // Lighthouse error warning
+  if (r.lhWarning) {
+    html += `<div style="background:#FFF3E0;border:1px solid #FF9800;border-radius:8px;padding:10px 14px;margin:12px 0;color:#E65100;">
+      ⚠️ <strong>Lighthouse 实验室数据不可用：</strong>${r.lhWarning}
+      <br><small>（仍可查看上方 CrUX 真实用户数据）</small>
+    </div>`;
   }
 
   // Lighthouse lab data
