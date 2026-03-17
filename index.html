@@ -118,6 +118,7 @@
       <h2>📊 分析结果</h2>
       <div class="export-btns">
         <button class="btn btn-secondary" onclick="copyToFeishu()">📋 复制到飞书</button>
+        <button class="btn btn-secondary" onclick="createFeishuDoc()">📄 创建飞书文档</button>
         <button class="btn btn-secondary" onclick="exportExcel()">📊 导出 Excel</button>
         <button class="btn btn-secondary" onclick="exportCSV()">📄 导出 CSV</button>
       </div>
@@ -882,6 +883,74 @@ function copyToFeishu() {
     document.execCommand('copy');
     document.body.removeChild(ta);
     setStatus('✅ 已复制到剪贴板！');
+  });
+}
+
+// Create Feishu document from analysis results
+function createFeishuDoc() {
+  if (!allResults.length) return alert('没有数据');
+  const results = allResults.filter(Boolean);
+  const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const device = document.getElementById('formFactor').value === 'mobile' ? '手机' : '桌面';
+
+  // Calculate stats
+  const okResults = results.filter(r => r.ok);
+  const avgLCP = okResults.filter(r => r.LCP?.p75).length > 0
+    ? Math.round(okResults.filter(r => r.LCP?.p75).reduce((s, r) => s + r.LCP.p75, 0) / okResults.filter(r => r.LCP?.p75).length)
+    : '-';
+  const avgCLS = okResults.filter(r => r.CLS?.p75).length > 0
+    ? (okResults.filter(r => r.CLS?.p75).reduce((s, r) => s + r.CLS.p75, 0) / okResults.filter(r => r.CLS?.p75).length).toFixed(3)
+    : '-';
+
+  // Build markdown
+  let md = `# 📊 Web Vitals 性能分析报告\n\n`;
+  md += `**分析时间：** ${now}  \n`;
+  md += `**设备类型：** ${device}  \n`;
+  md += `**URL 数量：** ${results.length}  \n`;
+  md += `**成功分析：** ${okResults.length}  \n`;
+  md += `**平均 LCP：** ${avgLCP}ms  \n`;
+  md += `**平均 CLS：** ${avgCLS}\n\n`;
+  md += `---\n\n`;
+  md += `## 📋 分析结果\n\n`;
+
+  // Table header
+  md += `| URL | CrUX评估 | LCP | CLS | INP | FCP | TTFB | 性能 | SEO | 报告 |\n`;
+  md += `|-----|----------|-----|-----|-----|-----|------|------|-----|------|\n`;
+
+  for (const r of results) {
+    if (!r.ok) {
+      md += `| ${r.url.length > 40 ? r.url.slice(0, 40) + '...' : r.url} | ❌失败 | - | - | - | - | - | - | - | - |\n`;
+      continue;
+    }
+    const cruxCat = r.rawData?.loadingExperience?.overall_category || r.cruxCategory;
+    const cwv = cruxCat === 'FAST' ? '🟢通过' : cruxCat === 'AVERAGE' ? '🟠需改进' : cruxCat === 'SLOW' ? '🔴差' : '-';
+    const lh = r.lighthouse || {};
+    const urlShort = r.url.length > 40 ? r.url.slice(0, 40) + '...' : r.url;
+    const reportUrl = buildReportUrl(r.url);
+    md += `| ${urlShort} | ${cwv} | ${r.LCP?.p75 ? Math.round(r.LCP.p75) + 'ms' : '-'} | ${r.CLS?.p75?.toFixed(3) || '-'} | ${r.INP?.p75 ? Math.round(r.INP.p75) + 'ms' : '-'} | ${r.FCP?.p75 ? Math.round(r.FCP.p75) + 'ms' : '-'} | ${r.TTFB?.p75 ? Math.round(r.TTFB.p75) + 'ms' : '-'} | ${lh.perfScore !== undefined ? Math.round(lh.perfScore * 100) : '-'} | ${lh.seoScore !== undefined ? Math.round(lh.seoScore * 100) : '-'} | [查看](${reportUrl}) |\n`;
+  }
+
+  md += `\n---\n\n`;
+  md += `*由 Web Vitals 分析工具生成 | CrUX=真实用户数据 | 实验室=Lighthouse模拟*\n`;
+
+  // Copy to clipboard
+  navigator.clipboard.writeText(md).then(() => {
+    setStatus('✅ 飞书文档内容已复制！发送给可乐即可创建飞书文档');
+    const btn = document.querySelector('[onclick="createFeishuDoc()"]');
+    const orig = btn.textContent;
+    btn.textContent = '✅ 已复制！发给可乐';
+    btn.style.background = '#E6F4EA';
+    btn.style.color = '#1E8E3E';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; }, 3000);
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = md;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    setStatus('✅ 已复制！发送给可乐即可创建飞书文档');
   });
 }
 
