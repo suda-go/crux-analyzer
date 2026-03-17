@@ -596,11 +596,11 @@ function showDetail(r) {
   }
 
   // Historical trend chart
+  html += `<hr style="border:none;border-top:2px solid var(--pink);margin:16px 0;">`;
+  html += `<details style="margin-top:12px" ${r.history?.periods?.length ? 'open' : ''}>
+    <summary style="cursor:pointer;font-weight:600;color:var(--pink);font-size:15px">📈 历史趋势（过去 25 周）</summary>`;
   if (r.history && r.history.periods.length > 0) {
     const h = r.history;
-    html += `<hr style="border:none;border-top:2px solid var(--pink);margin:16px 0;">`;
-    html += `<h3>📈 历史趋势（过去 ${h.periods.length} 周）</h3>`;
-
     for (const [name, values] of Object.entries(h.metrics)) {
       const meta = Object.values(METRICS_INFO).find(v => v.name === name);
       if (!meta || values.length === 0) continue;
@@ -633,7 +633,10 @@ function showDetail(r) {
         <span>${h.periods[0]}</span><span>${h.periods[h.periods.length-1]}</span>
       </div></div>`;
     }
+  } else {
+    html += `<div style="padding:16px;text-align:center;color:var(--text2)">该 URL/域名 在 CrUX 数据库中没有历史数据（可能流量不足或数据不足 25 周）</div>`;
   }
+  html += `</details>`;
 
   // Raw API data (collapsible)
   if (r.rawData) {
