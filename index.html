@@ -135,6 +135,11 @@
           <th style="text-align:center">无障碍</th>
           <th style="text-align:center">最佳做法</th>
           <th style="text-align:center">SEO</th>
+          <th style="text-align:center">实验室<br><small>LCP</small></th>
+          <th style="text-align:center">实验室<br><small>FCP</small></th>
+          <th style="text-align:center">实验室<br><small>CLS</small></th>
+          <th style="text-align:center">实验室<br><small>TBT</small></th>
+          <th style="text-align:center">实验室<br><small>SI</small></th>
           <th style="text-align:center">报告</th>
         </tr>
       </thead>
@@ -517,6 +522,18 @@ function renderResult(r) {
     }
   }
 
+  // Lighthouse lab metrics
+  const labMetrics = ['LCP', 'FCP', 'CLS', 'TBT', 'SI'];
+  for (const name of labMetrics) {
+    const val = lh?.[name];
+    if (val?.display) {
+      const sc = scoreClass(val.score);
+      cells += `<td style="text-align:center"><span class="score-badge ${sc}" style="font-size:11px">${val.display}</span></td>`;
+    } else {
+      cells += `<td style="text-align:center"><span class="score-badge score-na">-</span></td>`;
+    }
+  }
+
   // PageSpeed report link
   const reportUrl = buildReportUrl(r.url);
   cells += `<td style="text-align:center"><a href="${reportUrl}" target="_blank" style="color:var(--pink);font-size:12px;white-space:nowrap">📋 查看</a></td>`;
@@ -821,6 +838,11 @@ function buildFullRow(r) {
     '无障碍': lh?.accessibilityScore !== undefined ? Math.round(lh.accessibilityScore * 100) : '-',
     '最佳做法': lh?.bestPracticesScore !== undefined ? Math.round(lh.bestPracticesScore * 100) : '-',
     'SEO': lh?.seoScore !== undefined ? Math.round(lh.seoScore * 100) : '-',
+    '实验室LCP': lh?.LCP?.display || '-',
+    '实验室FCP': lh?.FCP?.display || '-',
+    '实验室CLS': lh?.CLS?.display || '-',
+    '实验室TBT': lh?.TBT?.display || '-',
+    '实验室SI': lh?.SI?.display || '-',
     '报告地址': buildReportUrl(r.url),
   };
 }
@@ -1059,6 +1081,11 @@ function exportHistoryReport(id) {
       <td style="text-align:center">${sc(lh.accessibilityScore)}</td>
       <td style="text-align:center">${sc(lh.bestPracticesScore)}</td>
       <td style="text-align:center">${sc(lh.seoScore)}</td>
+      <td style="text-align:center">${lh.LCP?.display||'-'}</td>
+      <td style="text-align:center">${lh.FCP?.display||'-'}</td>
+      <td style="text-align:center">${lh.CLS?.display||'-'}</td>
+      <td style="text-align:center">${lh.TBT?.display||'-'}</td>
+      <td style="text-align:center">${lh.SI?.display||'-'}</td>
       <td style="text-align:center"><a href="${reportUrl}" target="_blank" style="color:#FF6B9D">📋</a></td>
     </tr>`;
   }).join('');
@@ -1068,18 +1095,21 @@ function exportHistoryReport(id) {
 <style>
 body{font-family:-apple-system,sans-serif;padding:20px;background:#F5F7FA;color:#333}
 h1{font-size:20px}p{color:#666;font-size:14px}
-table{width:100%;border-collapse:collapse;background:#FFF;border-radius:8px;overflow:hidden;margin-top:12px}
-th{background:#FFF8FA;padding:10px 8px;font-size:12px;text-align:left;border-bottom:2px solid #FF6B9D;color:#666}
-td{padding:8px;border-bottom:1px solid #F0F0F0;font-size:13px}
+table{width:100%;border-collapse:collapse;background:#FFF;border-radius:8px;overflow:hidden;margin-top:12px;overflow-x:auto}
+th{background:#FFF8FA;padding:10px 6px;font-size:11px;text-align:left;border-bottom:2px solid #FF6B9D;color:#666;white-space:nowrap}
+td{padding:6px;border-bottom:1px solid #F0F0F0;font-size:12px}
 a{color:#FF6B9D;text-decoration:none}.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:700;font-size:12px}
 .good{background:#E6F4EA;color:#1E8E3E}.needs{background:#FEF7E0;color:#E37400}.poor{background:#FCE8E6;color:#D93025}.na{background:#F0F0F0;color:#999}
 </style></head><body>
 <h1>📊 Web Vitals 分析报告</h1>
 <p>🕐 ${record.time} | 📱 ${record.device} | 🔗 ${record.count} 个 URL</p>
-<table><thead><tr>
-<th>URL</th><th>CrUX</th><th>LCP</th><th>CLS</th><th>INP</th><th>FCP</th><th>TTFB</th><th>性能</th><th>无障碍</th><th>最佳做法</th><th>SEO</th><th>报告</th>
-</tr></thead><tbody>${rows}</tbody></table>
-<p style="margin-top:16px;text-align:center;color:#999;font-size:12px">由 Web Vitals 分析工具生成</p>
+<div style="overflow-x:auto"><table><thead><tr>
+<th>URL</th><th>CrUX评估</th><th>CrUX LCP</th><th>CrUX CLS</th><th>CrUX INP</th><th>CrUX FCP</th><th>CrUX TTFB</th>
+<th>性能</th><th>无障碍</th><th>最佳做法</th><th>SEO</th>
+<th>实验室LCP</th><th>实验室FCP</th><th>实验室CLS</th><th>实验室TBT</th><th>实验室SI</th>
+<th>报告</th>
+</tr></thead><tbody>${rows}</tbody></table></div>
+<p style="margin-top:16px;text-align:center;color:#999;font-size:12px">由 Web Vitals 分析工具生成 | CrUX=真实用户数据 | 实验室=Lighthouse模拟</p>
 </body></html>`;
 
   // Open in new tab
