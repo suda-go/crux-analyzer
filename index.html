@@ -254,8 +254,19 @@ async function fetchCrUX(url, strategy) {
   const params = new URLSearchParams({ url, strategy, category: 'performance', key: API_KEY });
   const resp = await fetch(`${api}?${params}`);
   const data = await resp.json().catch(() => ({}));
-  // Return data even if Lighthouse failed — CrUX may still be present
   return data;
+}
+
+// Fetch CrUX historical data (past 25 weeks)
+async function fetchCrUXHistory(url, strategy) {
+  const api = `https://chromeuxreport.googleapis.com/v1/records:queryHistoryRecord?key=${API_KEY}`;
+  const body = { url, formFactor: strategy === 'mobile' ? 'PHONE' : 'DESKTOP' };
+  try {
+    const resp = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return await resp.json();
+  } catch (e) {
+    return null;
+  }
 }
 
 function parseCrUX(data) {
@@ -386,10 +397,45 @@ async function analyzeOne(url, strategy, mode) {
       result.lhWarning = data.error.message;
     }
 
+    // Fetch history data in parallel (don't block main result)
+    const historyData = await fetchCrUXHistory(url, strategy);
+    if (historyData?.record?.collectionPeriods) {
+      result.history = parseCrUXHistory(historyData);
+    }
+
     return result;
   } catch (e) {
     return { url, ok: false, error: e.message };
   }
+}
+
+// Parse CrUX history into chart-friendly format
+function parseCrUXHistory(data) {
+  const metrics = data.record?.metrics || {};
+  const periods = data.record?.collectionPeriods || [];
+  const result = { periods: [], metrics: {} };
+
+  // Week labels (last entry = most recent)
+  result.periods = periods.map((p, i) => {
+    const date = new Date(p.firstDate.year, p.firstDate.month - 1, p.firstDate.day);
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  });
+
+  const metricMap = {
+    LARGEST_CONTENTFUL_PAINT_MS: 'LCP',
+    CUMULATIVE_LAYOUT_SHIFT_SCORE: 'CLS',
+    INTERACTION_TO_NEXT_PAINT: 'INP',
+    FIRST_CONTENTFUL_PAINT_MS: 'FCP',
+    EXPERIMENTAL_TIME_TO_FIRST_BYTE: 'TTFB',
+  };
+
+  for (const [key, shortName] of Object.entries(metricMap)) {
+    const m = metrics[key];
+    if (!m) continue;
+    result.metrics[shortName] = m.percentiles?.map(p => p.percentiles?.p75 || null) || [];
+  }
+
+  return result;
 }
 
 function renderResult(r) {
@@ -516,6 +562,46 @@ function showDetail(r) {
       html += `<div style="margin-top:12px;padding:8px;background:#E6F4EA;border-radius:6px;color:#1E8E3E;font-size:13px;">
         ✅ ${lh.passed.length} 项审计通过
       </div>`;
+    }
+  }
+
+  // Historical trend chart
+  if (r.history && r.history.periods.length > 0) {
+    const h = r.history;
+    html += `<hr style="border:none;border-top:2px solid var(--pink);margin:16px 0;">`;
+    html += `<h3>📈 历史趋势（过去 ${h.periods.length} 周）</h3>`;
+
+    for (const [name, values] of Object.entries(h.metrics)) {
+      const meta = Object.values(METRICS_INFO).find(v => v.name === name);
+      if (!meta || values.length === 0) continue;
+
+      const numValues = values.filter(v => v !== null);
+      if (numValues.length === 0) continue;
+
+      const maxVal = Math.max(...numValues) * 1.1;
+      const chartH = 80;
+
+      html += `<div style="margin:12px 0;">
+        <div style="font-weight:600;margin-bottom:4px;">${name} (${meta.label})</div>
+        <div style="display:flex;align-items:flex-end;gap:2px;height:${chartH}px;position:relative;">
+          <div style="position:absolute;top:0;left:0;right:0;border-top:1px dashed ${meta.good?'#34A853':'#CCC'}"></div>`;
+
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v === null) {
+          html += `<div style="flex:1;height:100%;display:flex;align-items:flex-end;justify-content:center"><div style="flex:1;background:#F0F0F0;height:2px" title="无数据"></div></div>`;
+          continue;
+        }
+        const pct = (v / maxVal) * 100;
+        const color = v <= meta.good ? '#34A853' : (v <= meta.poor ? '#FBBC04' : '#EA4335');
+        html += `<div style="flex:1;height:100%;display:flex;align-items:flex-end;justify-content:center" title="${h.periods[i]}: ${Math.round(v)}${meta.unit}">
+          <div style="flex:1;background:${color};height:${pct}%;border-radius:2px 2px 0 0;min-height:2px;transition:height 0.3s"></div>
+        </div>`;
+      }
+
+      html += `</div><div style="display:flex;justify-content:space-between;font-size:10px;color:#999;margin-top:2px">
+        <span>${h.periods[0]}</span><span>${h.periods[h.periods.length-1]}</span>
+      </div></div>`;
     }
   }
 
