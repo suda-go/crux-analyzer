@@ -544,8 +544,13 @@ function renderResult(r) {
 
 // Build PageSpeed Web.dev report URL
 function buildReportUrl(url) {
-  const encoded = url.replace(/https?:\/\//, '').replace(/\//g, '-');
-  return `https://pagespeed.web.dev/analysis/${encoded}?form_factor=mobile`;
+  // Remove query string and hash
+  let clean = url.split('?')[0].split('#')[0];
+  // Replace :// with - (e.g., https:// → https-)
+  clean = clean.replace(/:\/\//, '-');
+  // Replace / and . with -
+  clean = clean.replace(/[/.]/g, '-');
+  return `https://pagespeed.web.dev/analysis/${clean}?form_factor=mobile`;
 }
 
 function showDetail(r) {
