@@ -480,8 +480,8 @@ function renderResult(r) {
   tr.style.cursor = 'pointer';
   tr.onclick = () => showDetail(r);
 
-  // CrUX CWV Assessment
-  const cruxCat = r.rawData?.loadingExperience?.overall_category;
+  // CrUX CWV Assessment (from rawData or saved cruxCategory)
+  const cruxCat = r.rawData?.loadingExperience?.overall_category || r.cruxCategory;
   let cwvLabel, cwvClass;
   if (cruxCat === 'FAST') { cwvLabel = '通过'; cwvClass = 'score-good'; }
   else if (cruxCat === 'AVERAGE') { cwvLabel = '需改进'; cwvClass = 'score-needs'; }
@@ -560,7 +560,8 @@ function showDetail(r) {
   title.textContent = '📄 ' + r.url;
 
   let html = '';
-  const cruxMetrics = r.rawData?.loadingExperience?.metrics || {};
+  // Use rawData if available (live results), otherwise use saved cruxMetrics (history)
+  const cruxMetrics = r.rawData?.loadingExperience?.metrics || r.cruxMetrics || {};
 
   for (const [key, meta] of Object.entries(METRICS_INFO)) {
     const m = cruxMetrics[key];
@@ -683,7 +684,7 @@ function showDetail(r) {
   }
   html += `</details>`;
 
-  // Raw API data (collapsible)
+  // Raw API data (collapsible) - only available for live results
   if (r.rawData) {
     html += `<hr style="border:none;border-top:2px solid var(--pink);margin:16px 0;">`;
     html += `<details style="margin-top:12px">
@@ -735,12 +736,18 @@ async function startAnalysis() {
       const next = nextIndex++;
       await processOne(next);
     }
+
+    // Auto-save progress every 10 URLs
+    if (completed % 10 === 0) {
+      saveSession(allResults.filter(Boolean), strategy);
+    }
   }
 
   await Promise.all(workers);
 
-  // Save to history
+  // Save to history and session
   saveHistory(allResults, strategy);
+  saveSession(allResults.filter(Boolean), strategy);
 
   setStatus(`✅ 完成！共分析 ${urls.length} 个 URL`);
   setProgress(urls.length, urls.length);
@@ -964,20 +971,45 @@ function saveHistory(results, strategy) {
     ? Math.round(avgScore.reduce((s, r) => s + r.overallScore, 0) / avgScore.length * 100)
     : null;
 
-  const record = {
-    id: Date.now(),
-    time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
-    device: strategy === 'mobile' ? '手机' : '桌面',
-    count: validResults.length,
-    avgScore: avg,
-    results: validResults.map(r => ({
+  // Save full result objects (without rawData to save space, but keep Lighthouse)
+  const results = validResults.map(r => {
+    const saved = {
       url: r.url, ok: r.ok, error: r.error, overallScore: r.overallScore,
       LCP: r.LCP ? { ...r.LCP } : null,
       CLS: r.CLS ? { ...r.CLS } : null,
       INP: r.INP ? { ...r.INP } : null,
       FCP: r.FCP ? { ...r.FCP } : null,
       TTFB: r.TTFB ? { ...r.TTFB } : null,
-    }))
+    };
+    // Save Lighthouse data if available
+    if (r.lighthouse) {
+      saved.lighthouse = {
+        perfScore: r.lighthouse.perfScore,
+        accessibilityScore: r.lighthouse.accessibilityScore,
+        bestPracticesScore: r.lighthouse.bestPracticesScore,
+        seoScore: r.lighthouse.seoScore,
+        LCP: r.lighthouse.LCP ? { ...r.lighthouse.LCP } : null,
+        FCP: r.lighthouse.FCP ? { ...r.lighthouse.FCP } : null,
+        CLS: r.lighthouse.CLS ? { ...r.lighthouse.CLS } : null,
+        TBT: r.lighthouse.TBT ? { ...r.lighthouse.TBT } : null,
+        SI: r.lighthouse.SI ? { ...r.lighthouse.SI } : null,
+      };
+    }
+    // Save CrUX histogram data for detail view
+    if (r.rawData?.loadingExperience?.metrics) {
+      saved.cruxMetrics = r.rawData.loadingExperience.metrics;
+      saved.cruxCategory = r.rawData.loadingExperience.overall_category;
+    }
+    return saved;
+  });
+
+  const record = {
+    id: Date.now(),
+    time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+    device: strategy === 'mobile' ? '手机' : '桌面',
+    count: validResults.length,
+    avgScore: avg,
+    results
   };
 
   let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
@@ -1125,6 +1157,83 @@ a{color:#FF6B9D;text-decoration:none}.badge{display:inline-block;padding:2px 8px
 
 // Load history on page load
 loadHistory();
+
+// Session persistence (survives page refresh)
+const SESSION_KEY = 'crux_current_session';
+
+function saveSession(results, strategy) {
+  if (!results || results.length === 0) return;
+  try {
+    const session = {
+      time: Date.now(),
+      strategy,
+      results: results.map(r => {
+        const saved = {
+          url: r.url, ok: r.ok, error: r.error, overallScore: r.overallScore,
+          LCP: r.LCP ? { ...r.LCP } : null,
+          CLS: r.CLS ? { ...r.CLS } : null,
+          INP: r.INP ? { ...r.INP } : null,
+          FCP: r.FCP ? { ...r.FCP } : null,
+          TTFB: r.TTFB ? { ...r.TTFB } : null,
+        };
+        if (r.lighthouse) {
+          saved.lighthouse = {
+            perfScore: r.lighthouse.perfScore,
+            accessibilityScore: r.lighthouse.accessibilityScore,
+            bestPracticesScore: r.lighthouse.bestPracticesScore,
+            seoScore: r.lighthouse.seoScore,
+            LCP: r.lighthouse.LCP ? { ...r.lighthouse.LCP } : null,
+            FCP: r.lighthouse.FCP ? { ...r.lighthouse.FCP } : null,
+            CLS: r.lighthouse.CLS ? { ...r.lighthouse.CLS } : null,
+            TBT: r.lighthouse.TBT ? { ...r.lighthouse.TBT } : null,
+            SI: r.lighthouse.SI ? { ...r.lighthouse.SI } : null,
+          };
+        }
+        if (r.rawData?.loadingExperience?.metrics) {
+          saved.cruxMetrics = r.rawData.loadingExperience.metrics;
+          saved.cruxCategory = r.rawData.loadingExperience.overall_category;
+        }
+        return saved;
+      })
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch(e) { /* quota exceeded, silently fail */ }
+}
+
+function restoreSession() {
+  try {
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (!session || !session.results || session.results.length === 0) return;
+
+    const timeStr = new Date(session.time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    setStatus(`🔄 已恢复上次会话 (${session.results.length} 个URL, ${timeStr})`);
+
+    document.getElementById('resultsCard').classList.add('show');
+    const tbody = document.getElementById('resultsBody');
+    tbody.innerHTML = '';
+    allResults = session.results;
+
+    for (const r of session.results) {
+      renderResult(r);
+    }
+
+    // Show restore button if session is older than 1 hour
+    const ageMs = Date.now() - session.time;
+    if (ageMs > 3600000) {
+      setStatus(`🔄 已恢复 ${timeStr} 的分析结果（${session.results.length} 个URL）`);
+    }
+  } catch(e) { /* ignore */ }
+}
+
+// Auto-save before page unload
+window.addEventListener('beforeunload', () => {
+  if (allResults && allResults.length > 0) {
+    saveSession(allResults.filter(Boolean), document.getElementById('formFactor').value);
+  }
+});
+
+// Auto-restore last session on page load
+restoreSession();
 </script>
 </body>
 </html>
