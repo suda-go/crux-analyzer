@@ -117,6 +117,7 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <h2>📊 分析结果</h2>
       <div class="export-btns">
+        <button class="btn btn-secondary" onclick="copyToFeishu()">📋 复制到飞书</button>
         <button class="btn btn-secondary" onclick="exportExcel()">📊 导出 Excel</button>
         <button class="btn btn-secondary" onclick="exportCSV()">📄 导出 CSV</button>
       </div>
@@ -819,6 +820,69 @@ function importFile(event) {
   };
   reader.readAsArrayBuffer(file);
   event.target.value = '';
+}
+
+// Copy data as TSV for Feishu spreadsheet paste
+function copyToFeishu() {
+  if (!allResults.length) return alert('没有数据');
+  const results = allResults.filter(Boolean);
+  
+  // Build headers
+  const headers = ['URL', 'CrUX评估', 'CrUX LCP(ms)', 'CrUX CLS', 'CrUX INP(ms)', 'CrUX FCP(ms)', 'CrUX TTFB(ms)',
+    'Good% LCP', 'Good% CLS', '性能', '无障碍', '最佳做法', 'SEO',
+    '实验室LCP', '实验室FCP', '实验室CLS', '实验室TBT', '实验室SI', '报告地址'];
+  
+  // Build rows
+  const rows = results.map(r => {
+    if (!r.ok) return [r.url, '失败', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+    const cruxCat = r.rawData?.loadingExperience?.overall_category;
+    const cwv = cruxCat === 'FAST' ? '通过' : cruxCat === 'AVERAGE' ? '需改进' : cruxCat === 'SLOW' ? '差' : '';
+    const lh = r.lighthouse || {};
+    return [
+      r.url,
+      cwv,
+      r.LCP?.p75 ? Math.round(r.LCP.p75) : '',
+      r.CLS?.p75?.toFixed(3) || '',
+      r.INP?.p75 ? Math.round(r.INP.p75) : '',
+      r.FCP?.p75 ? Math.round(r.FCP.p75) : '',
+      r.TTFB?.p75 ? Math.round(r.TTFB.p75) : '',
+      r.LCP ? Math.round(r.LCP.goodPct * 100) + '%' : '',
+      r.CLS ? Math.round(r.CLS.goodPct * 100) + '%' : '',
+      lh.perfScore !== undefined ? Math.round(lh.perfScore * 100) : '',
+      lh.accessibilityScore !== undefined ? Math.round(lh.accessibilityScore * 100) : '',
+      lh.bestPracticesScore !== undefined ? Math.round(lh.bestPracticesScore * 100) : '',
+      lh.seoScore !== undefined ? Math.round(lh.seoScore * 100) : '',
+      lh.LCP?.display || '',
+      lh.FCP?.display || '',
+      lh.CLS?.display || '',
+      lh.TBT?.display || '',
+      lh.SI?.display || '',
+      buildReportUrl(r.url),
+    ];
+  });
+
+  // TSV format (tab-separated, works with spreadsheet paste)
+  const tsv = [headers.join('\t'), ...rows.map(r => r.join('\t'))].join('\n');
+  
+  navigator.clipboard.writeText(tsv).then(() => {
+    setStatus('✅ 已复制到剪贴板！打开飞书表格，Ctrl+V 粘贴即可');
+    // Visual feedback
+    const btn = document.querySelector('[onclick="copyToFeishu()"]');
+    const orig = btn.textContent;
+    btn.textContent = '✅ 已复制！';
+    btn.style.background = '#E6F4EA';
+    btn.style.color = '#1E8E3E';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.color = ''; }, 2000);
+  }).catch(err => {
+    // Fallback for non-HTTPS
+    const ta = document.createElement('textarea');
+    ta.value = tsv;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    setStatus('✅ 已复制到剪贴板！');
+  });
 }
 
 function exportJSON() {
