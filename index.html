@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Web Vitals 批量分析工具</title>
+<style>
+  :root {
+    --bg: #F5F7FA;
+    --card: #FFF;
+    --pink: #FF6B9D;
+    --green: #34A853;
+    --orange: #FBBC04;
+    --red: #EA4335;
+    --text: #333;
+    --text2: #666;
+    --border: #E0E0E0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: var(--text2); font-size: 14px; margin-bottom: 24px; }
+  
+  .config-card {
+    background: var(--card); border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px;
+  }
+  .config-card h2 { font-size: 16px; margin-bottom: 12px; }
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-end; }
+  .form-group { flex: 1; }
+  .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 12px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .form-group input:focus, .form-group textarea:focus { border-color: var(--pink); }
+  .form-group textarea { height: 120px; resize: vertical; font-family: monospace; font-size: 13px; }
+  
+  .btn {
+    padding: 10px 24px; border: none; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--pink); color: white; }
+  .btn-primary:hover { background: #E85A8A; }
+  .btn-primary:disabled { background: #CCC; cursor: not-allowed; }
+  .btn-secondary { background: #F0F0F0; color: var(--text); }
+  .btn-secondary:hover { background: #E0E0E0; }
+  
+  .progress-bar {
+    height: 4px; background: #F0F0F0; border-radius: 2px; margin: 12px 0;
+    overflow: hidden; display: none;
+  }
+  .progress-bar .bar { height: 100%; background: var(--pink); transition: width 0.3s; width: 0%; }
+  .progress-bar.active { display: block; }
+  
+  .status { font-size: 13px; color: var(--text2); margin-bottom: 12px; min-height: 20px; }
+  
+  /* Results Table */
+  .results-card {
+    background: var(--card); border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px;
+    overflow-x: auto; display: none;
+  }
+  .results-card.show { display: block; }
+  .results-card h2 { font-size: 16px; margin-bottom: 12px; }
+  
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 8px; border-bottom: 2px solid var(--border); font-weight: 600; color: var(--text2); white-space: nowrap; }
+  td { padding: 10px 8px; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+  tr:hover td { background: #FAFAFA; }
+  
+  .url-cell { max-width: 250px; word-break: break-all; font-weight: 500; }
+  .url-cell a { color: var(--pink); text-decoration: none; }
+  .url-cell a:hover { text-decoration: underline; }
+  
+  .score-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-weight: 700; font-size: 12px; min-width: 40px; text-align: center;
+  }
+  .score-good { background: #E6F4EA; color: #1E8E3E; }
+  .score-needs { background: #FEF7E0; color: #E37400; }
+  .score-poor { background: #FCE8E6; color: #D93025; }
+  .score-na { background: #F0F0F0; color: #999; }
+  
+  .metric-cell { text-align: center; }
+  .metric-val { font-weight: 600; font-size: 14px; }
+  .metric-label { font-size: 10px; color: var(--text2); }
+  
+  .emoji { font-size: 16px; }
+  
+  .summary-row td { font-weight: 700; background: #FFF8FA; border-top: 2px solid var(--pink); }
+  
+  /* Detail Panel */
+  .detail-panel {
+    background: var(--card); border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px;
+    display: none;
+  }
+  .detail-panel.show { display: block; }
+  .detail-panel h3 { font-size: 15px; margin-bottom: 8px; }
+  .histogram { display: flex; height: 24px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .histogram .h-good { background: var(--green); }
+  .histogram .h-needs { background: var(--orange); }
+  .histogram .h-poor { background: var(--red); }
+  .histogram-legend { display: flex; gap: 16px; font-size: 12px; margin-top: 4px; }
+  .histogram-legend span { display: flex; align-items: center; gap: 4px; }
+  .histogram-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+  
+  .export-btns { display: flex; gap: 8px; margin-top: 12px; }
+  
+  @media (max-width: 768px) {
+    .form-row { flex-direction: column; }
+    table { font-size: 11px; }
+    td, th { padding: 6px 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📊 Web Vitals 批量分析</h1>
+  <p class="subtitle">基于 CrUX API（Chrome 真实用户数据）</p>
+  
+  <div class="config-card">
+    <h2>⚙️ 配置</h2>
+    <div class="form-row">
+      <div class="form-group" style="flex:2">
+        <label>🔑 Google Cloud API Key</label>
+        <input type="password" id="apiKey" placeholder="AIzaSy...">
+      </div>
+      <div class="form-group">
+        <label>📱 设备类型</label>
+        <select id="formFactor">
+          <option value="PHONE">手机</option>
+          <option value="DESKTOP">桌面</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>🔗 要分析的 URL（每行一个）</label>
+      <textarea id="urlList" placeholder="https://example.com&#10;https://example.org&#10;..."></textarea>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary" id="startBtn" onclick="startAnalysis()">🚀 开始分析</button>
+      <button class="btn btn-secondary" onclick="loadSample()">📋 加载示例</button>
+      <button class="btn btn-secondary" onclick="clearAll()">🗑️ 清空</button>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="bar" id="progressBarInner"></div></div>
+    <div class="status" id="status"></div>
+  </div>
+  
+  <!-- Results -->
+  <div class="results-card" id="resultsCard">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2>📊 分析结果</h2>
+      <div class="export-btns">
+        <button class="btn btn-secondary" onclick="exportJSON()">💾 导出 JSON</button>
+        <button class="btn btn-secondary" onclick="exportCSV()">📄 导出 CSV</button>
+      </div>
+    </div>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>URL</th>
+          <th style="text-align:center">评分</th>
+          <th style="text-align:center">LCP<br><small>最大内容渲染</small></th>
+          <th style="text-align:center">CLS<br><small>布局偏移</small></th>
+          <th style="text-align:center">INP<br><small>交互响应</small></th>
+          <th style="text-align:center">FCP<br><small>首次渲染</small></th>
+          <th style="text-align:center">TTFB<br><small>首字节</small></th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Detail Panel -->
+  <div class="detail-panel" id="detailPanel">
+    <h3 id="detailTitle"></h3>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<script>
+const METRICS = {
+  largest_contentful_paint: { name: 'LCP', unit: 'ms', good: 2500, poor: 4000, label: '最大内容渲染' },
+  cumulative_layout_shift: { name: 'CLS', unit: '', good: 0.1, poor: 0.25, label: '布局偏移', decimals: 3 },
+  interaction_to_next_paint: { name: 'INP', unit: 'ms', good: 200, poor: 500, label: '交互响应' },
+  first_contentful_paint: { name: 'FCP', unit: 'ms', good: 1800, poor: 3000, label: '首次渲染' },
+  experimental_time_to_first_byte: { name: 'TTFB', unit: 'ms', good: 800, poor: 1800, label: '首字节' },
+};
+
+let allResults = [];
+let allRawData = [];
+
+function getApiKey() { return document.getElementById('apiKey').value.trim(); }
+function getUrls() {
+  return document.getElementById('urlList').value.split('\n')
+    .map(u => u.trim()).filter(u => u && u.startsWith('http'));
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+function setProgress(current, total) {
+  const pct = total > 0 ? (current / total * 100) : 0;
+  document.getElementById('progressBarInner').style.width = pct + '%';
+}
+
+function scoreClass(score) {
+  if (score === null || score === undefined) return 'score-na';
+  if (score >= 0.9) return 'score-good';
+  if (score >= 0.5) return 'score-needs';
+  return 'score-poor';
+}
+
+function scoreLabel(score) {
+  if (score === null || score === undefined) return '无数据';
+  const pct = Math.round(score * 100);
+  return pct + '%';
+}
+
+function metricClass(value, good, poor) {
+  if (value === null || value === undefined) return 'score-na';
+  if (value <= good) return 'score-good';
+  if (value <= poor) return 'score-needs';
+  return 'score-poor';
+}
+
+function formatMetric(value, unit, decimals) {
+  if (value === null || value === undefined) return '-';
+  if (unit === 'ms') return Math.round(value) + 'ms';
+  if (decimals) return value.toFixed(decimals);
+  return value;
+}
+
+async function queryCrUX(url, apiKey, formFactor) {
+  const api = `https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${apiKey}`;
+  const body = JSON.stringify({ url, formFactor });
+  
+  const resp = await fetch(api, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body
+  });
+  
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${resp.status}`);
+  }
+  
+  return resp.json();
+}
+
+async function analyzeOne(url, apiKey, formFactor) {
+  try {
+    const data = await queryCrUX(url, apiKey, formFactor);
+    const metrics = data.record?.metrics || {};
+    
+    const result = { url, ok: true };
+    const overallScores = [];
+    
+    for (const [key, meta] of Object.entries(METRICS)) {
+      const m = metrics[key];
+      if (m) {
+        const p75 = m.percentiles?.p75;
+        const goodPct = (m.histogram?.[0]?.density || 0);
+        result[meta.name] = { p75, goodPct };
+        overallScores.push(goodPct);
+      } else {
+        result[meta.name] = null;
+      }
+    }
+    
+    result.overallScore = overallScores.length > 0 
+      ? overallScores.reduce((a, b) => a + b, 0) / overallScores.length 
+      : null;
+    
+    result.rawData = data;
+    return result;
+  } catch (e) {
+    return { url, ok: false, error: e.message };
+  }
+}
+
+function renderResult(r) {
+  const tbody = document.getElementById('resultsBody');
+  
+  if (!r.ok) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="url-cell"><a href="${r.url}" target="_blank">${r.url}</a></td>
+      <td colspan="6" style="color:var(--red)">❌ ${r.error}</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+  
+  const tr = document.createElement('tr');
+  tr.style.cursor = 'pointer';
+  tr.onclick = () => showDetail(r);
+  
+  const score = r.overallScore;
+  const sc = scoreClass(score);
+  
+  let cells = `<td class="url-cell"><a href="${r.url}" target="_blank">${r.url.length > 50 ? r.url.slice(0,50)+'...' : r.url}</a></td>`;
+  cells += `<td style="text-align:center"><span class="score-badge ${sc}">${scoreLabel(score)}</span></td>`;
+  
+  for (const name of ['LCP', 'CLS', 'INP', 'FCP', 'TTFB']) {
+    const m = r[name];
+    const meta = Object.values(METRICS).find(v => v.name === name);
+    if (m && meta) {
+      const val = m.p75;
+      const mc = metricClass(val, meta.good, meta.poor);
+      cells += `<td class="metric-cell">
+        <span class="score-badge ${mc}">${formatMetric(val, meta.unit, meta.decimals)}</span>
+        <div class="metric-label">${Math.round(m.goodPct * 100)}% 好</div>
+      </td>`;
+    } else {
+      cells += `<td class="metric-cell"><span class="score-badge score-na">-</span></td>`;
+    }
+  }
+  
+  tr.innerHTML = cells;
+  tbody.appendChild(tr);
+}
+
+function showDetail(r) {
+  const panel = document.getElementById('detailPanel');
+  const title = document.getElementById('detailTitle');
+  const content = document.getElementById('detailContent');
+  
+  title.textContent = '📄 ' + r.url;
+  
+  let html = '';
+  const metrics = r.rawData?.record?.metrics || {};
+  
+  for (const [key, meta] of Object.entries(METRICS)) {
+    const m = metrics[key];
+    if (!m) continue;
+    
+    const hist = m.histogram || [];
+    const good = (hist[0]?.density || 0) * 100;
+    const needs = (hist[1]?.density || 0) * 100;
+    const poor = (hist[2]?.density || 0) * 100;
+    const p75 = m.percentiles?.p75;
+    
+    html += `
+      <h3>${meta.name} - ${meta.label}</h3>
+      <div style="margin-bottom:8px;">P75: <strong>${formatMetric(p75, meta.unit, meta.decimals)}</strong></div>
+      <div class="histogram">
+        <div class="h-good" style="width:${good}%"></div>
+        <div class="h-needs" style="width:${needs}%"></div>
+        <div class="h-poor" style="width:${poor}%"></div>
+      </div>
+      <div class="histogram-legend">
+        <span><span class="dot" style="background:var(--green)"></span> 好 ${good.toFixed(1)}%</span>
+        <span><span class="dot" style="background:var(--orange)"></span> 需改进 ${needs.toFixed(1)}%</span>
+        <span><span class="dot" style="background:var(--red)"></span> 差 ${poor.toFixed(1)}%</span>
+      </div>
+      <hr style="border:none;border-top:1px solid #F0F0F0;margin:12px 0;">
+    `;
+  }
+  
+  content.innerHTML = html;
+  panel.classList.add('show');
+  panel.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function startAnalysis() {
+  const apiKey = getApiKey();
+  if (!apiKey) { alert('请输入 API Key'); return; }
+  
+  const urls = getUrls();
+  if (urls.length === 0) { alert('请输入至少一个 URL'); return; }
+  
+  const formFactor = document.getElementById('formFactor').value;
+  const btn = document.getElementById('startBtn');
+  const progressBar = document.getElementById('progressBar');
+  
+  btn.disabled = true;
+  progressBar.classList.add('active');
+  document.getElementById('resultsBody').innerHTML = '';
+  document.getElementById('resultsCard').classList.add('show');
+  document.getElementById('detailPanel').classList.remove('show');
+  allResults = [];
+  allRawData = [];
+  
+  for (let i = 0; i < urls.length; i++) {
+    setStatus(`[${i + 1}/${urls.length}] 分析中: ${urls[i]}`);
+    setProgress(i, urls.length);
+    
+    const r = await analyzeOne(urls[i], apiKey, formFactor);
+    allResults.push(r);
+    if (r.rawData) allRawData.push(r.rawData);
+    renderResult(r);
+    
+    // Small delay to avoid rate limiting
+    if (i < urls.length - 1) await new Promise(r => setTimeout(r, 500));
+  }
+  
+  setProgress(urls.length, urls.length);
+  setStatus(`✅ 完成！共分析 ${urls.length} 个 URL`);
+  btn.disabled = false;
+}
+
+function loadSample() {
+  document.getElementById('urlList').value = `https://www.google.com
+https://www.github.com
+https://www.wikipedia.org`;
+  document.getElementById('apiKey').value = 'AQ.Ab8RN6J75BCCA8QD4yyqdC9QMPre9HDru9hQuTPaobqYMJrDWA';
+}
+
+function clearAll() {
+  document.getElementById('urlList').value = '';
+  document.getElementById('resultsBody').innerHTML = '';
+  document.getElementById('resultsCard').classList.remove('show');
+  document.getElementById('detailPanel').classList.remove('show');
+  document.getElementById('progressBar').classList.remove('active');
+  setStatus('');
+  allResults = [];
+  allRawData = [];
+}
+
+function exportJSON() {
+  if (allResults.length === 0) { alert('没有数据'); return; }
+  const data = allResults.map(r => ({
+    url: r.url,
+    ok: r.ok,
+    error: r.error,
+    overallScore: r.overallScore,
+    LCP: r.LCP?.p75,
+    CLS: r.CLS?.p75,
+    INP: r.INP?.p75,
+    FCP: r.FCP?.p75,
+    TTFB: r.TTFB?.p75,
+  }));
+  download(JSON.stringify(data, null, 2), 'web-vitals.json', 'application/json');
+}
+
+function exportCSV() {
+  if (allResults.length === 0) { alert('没有数据'); return; }
+  let csv = 'URL,评分,LCP,CLS,INP,FCP,TTFB\n';
+  for (const r of allResults) {
+    if (!r.ok) { csv += `"${r.url}",错误,,,,,\n`; continue; }
+    csv += `"${r.url}",${r.overallScore ? Math.round(r.overallScore*100)+'%' : '-'},`;
+    csv += `${r.LCP?.p75 || '-'}ms,`;
+    csv += `${r.CLS?.p75?.toFixed(3) || '-'},`;
+    csv += `${r.INP?.p75 || '-'}ms,`;
+    csv += `${r.FCP?.p75 || '-'}ms,`;
+    csv += `${r.TTFB?.p75 || '-'}ms\n`;
+  }
+  download(csv, 'web-vitals.csv', 'text/csv');
+}
+
+function download(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Auto-save API key
+document.getElementById('apiKey').addEventListener('change', function() {
+  localStorage.setItem('crux_api_key', this.value);
+});
+const savedKey = localStorage.getItem('crux_api_key');
+if (savedKey) document.getElementById('apiKey').value = savedKey;
+</script>
+</body>
+</html>
