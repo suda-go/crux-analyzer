@@ -1036,7 +1036,7 @@ function saveHistory(results, strategy) {
     : null;
 
   // Save full result objects (without rawData to save space, but keep Lighthouse)
-  const results = validResults.map(r => {
+  const savedResults = validResults.map(r => {
     const saved = {
       url: r.url, ok: r.ok, error: r.error, overallScore: r.overallScore,
       LCP: r.LCP ? { ...r.LCP } : null,
@@ -1073,7 +1073,7 @@ function saveHistory(results, strategy) {
     device: strategy === 'mobile' ? '手机' : '桌面',
     count: validResults.length,
     avgScore: avg,
-    results
+    results: savedResults
   };
 
   let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
