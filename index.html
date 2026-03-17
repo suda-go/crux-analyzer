@@ -309,6 +309,46 @@ function parseLighthouse(data) {
     }
   }
 
+  // Extract diagnostics and opportunities (passed audit refs with weight)
+  const auditRefs = perf.auditRefs || [];
+  result.diagnostics = [];
+  result.opportunities = [];
+  result.passed = [];
+
+  for (const ref of auditRefs) {
+    const audit = audits[ref.id];
+    if (!audit) continue;
+
+    const item = {
+      id: ref.id,
+      title: audit.title,
+      description: audit.description,
+      score: audit.score,
+      displayValue: audit.displayValue,
+      weight: ref.weight,
+      group: ref.group,
+    };
+
+    // Score 1 = passed, score < 1 = needs work, score null = informative
+    if (audit.score === null || audit.score === undefined) {
+      if (ref.group === 'diagnostics' || ref.group === 'metrics') {
+        result.diagnostics.push(item);
+      }
+    } else if (audit.score < 1) {
+      if (ref.group === 'load-opportunities') {
+        result.opportunities.push({ ...item, wastedMs: audit.details?.overallSavingsMs });
+      } else {
+        result.diagnostics.push(item);
+      }
+    } else if (audit.score >= 1) {
+      result.passed.push(item);
+    }
+  }
+
+  // Sort by weight (higher = more important)
+  result.diagnostics.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+  result.opportunities.sort((a, b) => (b.wastedMs || 0) - (a.wastedMs || 0));
+
   return result;
 }
 
@@ -331,11 +371,11 @@ async function analyzeOne(url, strategy, mode) {
     const crux = parseCrUX(data);
     Object.assign(result, crux);
 
-    // Also get Lighthouse lab data if requested and available
-    if (mode === 'lighthouse' && hasLH) {
+    // Parse Lighthouse data if available (always, for diagnostics)
+    if (hasLH) {
       const lh = parseLighthouse(data);
       result.lighthouse = lh;
-      if (lh.perfScore !== undefined) result.overallScore = lh.perfScore;
+      if (mode === 'lighthouse' && lh.perfScore !== undefined) result.overallScore = lh.perfScore;
     }
 
     // Use CrUX overall category if no LH score
@@ -427,13 +467,55 @@ function showDetail(r) {
   // Lighthouse lab data
   if (r.lighthouse) {
     const lh = r.lighthouse;
+    html += `<hr style="border:none;border-top:2px solid var(--pink);margin:16px 0;">`;
+    html += `<h3>🧪 Lighthouse 实验室数据</h3>`;
     if (lh.perfScore !== undefined) {
-      html += `<h3>🧪 Lighthouse 实验室数据</h3>
-        <div>性能评分: <span class="score-badge ${scoreClass(lh.perfScore)}">${Math.round(lh.perfScore*100)}</span></div><br>`;
+      html += `<div style="margin-bottom:12px;">性能评分: <span class="score-badge ${scoreClass(lh.perfScore)}">${Math.round(lh.perfScore*100)}</span></div>`;
     }
-    for (const [name, val] of Object.entries(lh)) {
-      if (name === 'perfScore') continue;
-      if (val?.display) html += `<div><strong>${name}</strong>: ${val.display}</div>`;
+
+    // Lab metrics
+    html += `<div style="margin-bottom:12px;">`;
+    for (const name of ['LCP', 'FCP', 'CLS', 'TBT', 'SI']) {
+      const val = lh[name];
+      if (val?.display) {
+        const sc = scoreClass(val.score);
+        html += `<div><span class="score-badge ${sc}" style="margin-right:6px">${val.display}</span> ${name}</div>`;
+      }
+    }
+    html += `</div>`;
+
+    // Diagnostics
+    if (lh.diagnostics && lh.diagnostics.length > 0) {
+      html += `<h3 style="margin-top:16px">🔍 性能诊断</h3>`;
+      for (const d of lh.diagnostics) {
+        const sc = d.score === null ? 'score-na' : scoreClass(d.score);
+        html += `<div style="padding:8px;border:1px solid #F0F0F0;border-radius:6px;margin:6px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span><span class="score-badge ${sc}" style="margin-right:6px">●</span><strong>${d.title}</strong></span>
+            ${d.displayValue ? `<span style="color:var(--text2);font-size:12px">${d.displayValue}</span>` : ''}
+          </div>
+        </div>`;
+      }
+    }
+
+    // Opportunities
+    if (lh.opportunities && lh.opportunities.length > 0) {
+      html += `<h3 style="margin-top:16px">⚡ 优化机会</h3>`;
+      for (const o of lh.opportunities) {
+        html += `<div style="padding:8px;border:1px solid #F0F0F0;border-radius:6px;margin:6px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span><strong>${o.title}</strong></span>
+            ${o.wastedMs ? `<span style="color:var(--red);font-size:12px;font-weight:600">可节省 ${Math.round(o.wastedMs)}ms</span>` : ''}
+          </div>
+        </div>`;
+      }
+    }
+
+    // Passed audits count
+    if (lh.passed && lh.passed.length > 0) {
+      html += `<div style="margin-top:12px;padding:8px;background:#E6F4EA;border-radius:6px;color:#1E8E3E;font-size:13px;">
+        ✅ ${lh.passed.length} 项审计通过
+      </div>`;
     }
   }
 
