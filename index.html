@@ -425,27 +425,43 @@ async function startAnalysis() {
   const strategy = document.getElementById('formFactor').value;
   const mode = document.getElementById('analysisMode').value;
   const btn = document.getElementById('startBtn');
+  const CONCURRENCY = 3; // 同时分析 3 个
 
   btn.disabled = true;
   document.getElementById('progressBar').classList.add('active');
   document.getElementById('resultsBody').innerHTML = '';
   document.getElementById('resultsCard').classList.add('show');
   document.getElementById('detailPanel').classList.remove('show');
-  allResults = [];
+  allResults = new Array(urls.length);
   allRawData = [];
 
-  for (let i = 0; i < urls.length; i++) {
-    setStatus(`[${i+1}/${urls.length}] 分析中: ${urls[i]}`);
-    setProgress(i, urls.length);
-    const r = await analyzeOne(urls[i], strategy, mode);
-    allResults.push(r);
+  let completed = 0;
+  let nextIndex = CONCURRENCY; // tracks which URL to assign next
+
+  // First N workers start immediately
+  const workers = urls.slice(0, CONCURRENCY).map((url, i) => processOne(i));
+
+  async function processOne(idx) {
+    setStatus(`⏳ [${completed+1}/${urls.length}] 分析中: ${urls[idx]}`);
+    const r = await analyzeOne(urls[idx], strategy, mode);
+    allResults[idx] = r;
     if (r.rawData) allRawData.push(r.rawData);
     renderResult(r);
-    if (i < urls.length - 1) await new Promise(r => setTimeout(r, 1000));
+    completed++;
+    setProgress(completed, urls.length);
+    setStatus(`⏳ [${completed}/${urls.length}] 已完成`);
+
+    // Pick up next URL
+    if (nextIndex < urls.length) {
+      const next = nextIndex++;
+      await processOne(next);
+    }
   }
 
-  setProgress(urls.length, urls.length);
+  await Promise.all(workers);
+
   setStatus(`✅ 完成！共分析 ${urls.length} 个 URL`);
+  setProgress(urls.length, urls.length);
   btn.disabled = false;
 }
 
@@ -518,7 +534,7 @@ function importFile(event) {
 
 function exportJSON() {
   if (!allResults.length) return alert('没有数据');
-  const data = allResults.map(r => ({ url: r.url, ok: r.ok, error: r.error, overallScore: r.overallScore,
+  const data = allResults.filter(Boolean).map(r => ({ url: r.url, ok: r.ok, error: r.error, overallScore: r.overallScore,
     LCP: r.LCP?.p75, CLS: r.CLS?.p75, INP: r.INP?.p75, FCP: r.FCP?.p75, TTFB: r.TTFB?.p75 }));
   download(JSON.stringify(data, null, 2), 'web-vitals.json', 'application/json');
 }
@@ -526,7 +542,7 @@ function exportJSON() {
 function exportCSV() {
   if (!allResults.length) return alert('没有数据');
   let csv = 'URL,评分,LCP,CLS,INP,FCP,TTFB\n';
-  for (const r of allResults) {
+  for (const r of allResults.filter(Boolean)) {
     if (!r.ok) { csv += `"${r.url}",错误,,,,,\n`; continue; }
     csv += `"${r.url}",${r.overallScore?Math.round(r.overallScore*100)+'%':'-'},`;
     csv += `${r.LCP?.p75||'-'}ms,${r.CLS?.p75?.toFixed(3)||'-'},${r.INP?.p75||'-'}ms,${r.FCP?.p75||'-'}ms,${r.TTFB?.p75||'-'}ms\n`;
