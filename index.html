@@ -659,13 +659,97 @@ function exportJSON() {
 
 function exportCSV() {
   if (!allResults.length) return alert('没有数据');
-  let csv = 'URL,评分,LCP,CLS,INP,FCP,TTFB\n';
-  for (const r of allResults.filter(Boolean)) {
-    if (!r.ok) { csv += `"${r.url}",错误,,,,,\n`; continue; }
-    csv += `"${r.url}",${r.overallScore?Math.round(r.overallScore*100)+'%':'-'},`;
-    csv += `${r.LCP?.p75||'-'}ms,${r.CLS?.p75?.toFixed(3)||'-'},${r.INP?.p75||'-'}ms,${r.FCP?.p75||'-'}ms,${r.TTFB?.p75||'-'}ms\n`;
+
+  const results = allResults.filter(Boolean);
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: 概览
+  const summaryRows = results.map(r => {
+    if (!r.ok) return { 'URL': r.url, '状态': '失败', '错误': r.error };
+    return {
+      'URL': r.url,
+      '评分': r.overallScore ? Math.round(r.overallScore * 100) + '%' : '-',
+      'LCP (ms)': r.LCP?.p75 || '-',
+      'CLS': r.CLS?.p75?.toFixed(3) || '-',
+      'INP (ms)': r.INP?.p75 || '-',
+      'FCP (ms)': r.FCP?.p75 || '-',
+      'TTFB (ms)': r.TTFB?.p75 || '-',
+      'Good% LCP': r.LCP ? Math.round(r.LCP.goodPct * 100) + '%' : '-',
+      'Good% CLS': r.CLS ? Math.round(r.CLS.goodPct * 100) + '%' : '-',
+      'Good% INP': r.INP ? Math.round(r.INP.goodPct * 100) + '%' : '-',
+      'Good% FCP': r.FCP ? Math.round(r.FCP.goodPct * 100) + '%' : '-',
+    };
+  });
+  const ws1 = XLSX.utils.json_to_sheet(summaryRows);
+  XLSX.utils.book_append_sheet(wb, ws1, '概览');
+
+  // Sheet 2: Lighthouse 指标
+  const lhRows = [];
+  for (const r of results) {
+    if (!r.ok || !r.lighthouse) continue;
+    const lh = r.lighthouse;
+    lhRows.push({
+      'URL': r.url,
+      '性能评分': lh.perfScore !== undefined ? Math.round(lh.perfScore * 100) : '-',
+      'LCP': lh.LCP?.display || '-',
+      'FCP': lh.FCP?.display || '-',
+      'CLS': lh.CLS?.display || '-',
+      'TBT': lh.TBT?.display || '-',
+      'SI': lh.SI?.display || '-',
+    });
   }
-  download(csv, 'web-vitals.csv', 'text/csv');
+  if (lhRows.length > 0) {
+    const ws2 = XLSX.utils.json_to_sheet(lhRows);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Lighthouse指标');
+  }
+
+  // Sheet 3: 性能诊断
+  const diagRows = [];
+  for (const r of results) {
+    if (!r.ok || !r.lighthouse?.diagnostics) continue;
+    for (const d of r.lighthouse.diagnostics) {
+      diagRows.push({
+        'URL': r.url,
+        '诊断项': d.title,
+        '得分': d.score === null ? 'N/A' : Math.round(d.score * 100),
+        '详细值': d.displayValue || '-',
+        '权重': d.weight || 0,
+      });
+    }
+  }
+  if (diagRows.length > 0) {
+    const ws3 = XLSX.utils.json_to_sheet(diagRows);
+    XLSX.utils.book_append_sheet(wb, ws3, '性能诊断');
+  }
+
+  // Sheet 4: 优化机会
+  const oppRows = [];
+  for (const r of results) {
+    if (!r.ok || !r.lighthouse?.opportunities) continue;
+    for (const o of r.lighthouse.opportunities) {
+      oppRows.push({
+        'URL': r.url,
+        '优化项': o.title,
+        '可节省(ms)': o.wastedMs || 0,
+      });
+    }
+  }
+  if (oppRows.length > 0) {
+    const ws4 = XLSX.utils.json_to_sheet(oppRows);
+    XLSX.utils.book_append_sheet(wb, ws4, '优化机会');
+  }
+
+  // Sheet 5: 原始数据 (JSON per URL)
+  const rawRows = results.map(r => ({
+    'URL': r.url,
+    '状态': r.ok ? '成功' : '失败',
+    '完整JSON': r.ok ? JSON.stringify(r.rawData) : r.error,
+  }));
+  const ws5 = XLSX.utils.json_to_sheet(rawRows);
+  XLSX.utils.book_append_sheet(wb, ws5, '原始数据');
+
+  // Generate and download
+  XLSX.writeFile(wb, `web-vitals-${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function download(content, filename, type) {
