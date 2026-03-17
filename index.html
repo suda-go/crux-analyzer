@@ -113,12 +113,16 @@
       <thead>
         <tr>
           <th>URL</th>
-          <th style="text-align:center">评分</th>
+          <th style="text-align:center">CrUX<br><small>评估</small></th>
           <th style="text-align:center">LCP<br><small>最大内容渲染</small></th>
           <th style="text-align:center">CLS<br><small>布局偏移</small></th>
           <th style="text-align:center">INP<br><small>交互响应</small></th>
           <th style="text-align:center">FCP<br><small>首次渲染</small></th>
           <th style="text-align:center">TTFB<br><small>首字节</small></th>
+          <th style="text-align:center">性能</th>
+          <th style="text-align:center">无障碍</th>
+          <th style="text-align:center">最佳做法</th>
+          <th style="text-align:center">SEO</th>
         </tr>
       </thead>
       <tbody id="resultsBody"></tbody>
@@ -304,6 +308,11 @@ function parseLighthouse(data) {
   const result = {};
   result.perfScore = perf.score; // 0-1
 
+  // Get all category scores
+  result.accessibilityScore = cats.accessibility?.score;
+  result.bestPracticesScore = cats['best-practices']?.score;
+  result.seoScore = cats.seo?.score;
+
   // Map Lighthouse metrics
   const map = {
     'largest-contentful-paint': 'LCP',
@@ -453,12 +462,16 @@ function renderResult(r) {
   tr.style.cursor = 'pointer';
   tr.onclick = () => showDetail(r);
 
-  const score = r.overallScore;
-  const sc = scoreClass(score);
-  let scoreText = score !== null ? Math.round(score * 100) + '%' : '-';
+  // CrUX CWV Assessment
+  const cruxCat = r.rawData?.loadingExperience?.overall_category;
+  let cwvLabel, cwvClass;
+  if (cruxCat === 'FAST') { cwvLabel = '通过'; cwvClass = 'score-good'; }
+  else if (cruxCat === 'AVERAGE') { cwvLabel = '需改进'; cwvClass = 'score-needs'; }
+  else if (cruxCat === 'SLOW') { cwvLabel = '差'; cwvClass = 'score-poor'; }
+  else { cwvLabel = '-'; cwvClass = 'score-na'; }
 
   let cells = `<td class="url-cell"><a href="${r.url}" target="_blank">${r.url.length>50 ? r.url.slice(0,50)+'...' : r.url}</a></td>`;
-  cells += `<td style="text-align:center"><span class="score-badge ${sc}">${scoreText}</span></td>`;
+  cells += `<td style="text-align:center"><span class="score-badge ${cwvClass}">${cwvLabel}</span></td>`;
 
   for (const name of ['LCP', 'CLS', 'INP', 'FCP', 'TTFB']) {
     const m = r[name];
@@ -471,6 +484,23 @@ function renderResult(r) {
       cells += `</td>`;
     } else {
       cells += `<td class="metric-cell"><span class="score-badge score-na">-</span></td>`;
+    }
+  }
+
+  // Lighthouse category scores
+  const lh = r.lighthouse;
+  const lhCats = [
+    { key: 'perfScore', label: '性能' },
+    { key: 'accessibilityScore', label: '无障碍' },
+    { key: 'bestPracticesScore', label: '最佳做法' },
+    { key: 'seoScore', label: 'SEO' },
+  ];
+  for (const cat of lhCats) {
+    const val = lh?.[cat.key];
+    if (val !== undefined && val !== null) {
+      cells += `<td style="text-align:center"><span class="score-badge ${scoreClass(val)}">${Math.round(val * 100)}</span></td>`;
+    } else {
+      cells += `<td style="text-align:center"><span class="score-badge score-na">-</span></td>`;
     }
   }
 
